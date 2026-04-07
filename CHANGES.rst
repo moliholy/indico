@@ -10,6 +10,8 @@ Version 3.3.13
 Improvements
 ^^^^^^^^^^^^
 
+- Allow managers to override accommodation date range validation when editing
+  registrations (:issue:`7415`, :pr:`7433`, thanks :user:`moliholy, unconventionaldotdev`)
 - Include keywords in contribution CSV/Excel exports (:pr:`7421`)
 
 Bugfixes
