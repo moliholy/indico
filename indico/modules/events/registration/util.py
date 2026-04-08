@@ -535,7 +535,7 @@ def modify_registration(registration, data, management=False, notify_user=True):
         if consent_to_publish is not None:
             update_registration_consent_to_publish(registration, consent_to_publish)
 
-    registration.sync_state()
+    registration.sync_state(_skip_moderation=management)
     db.session.flush()
     # sanity check
     if billable_items_locked and old_price != registration.price:

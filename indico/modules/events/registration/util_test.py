@@ -20,7 +20,7 @@ from indico.modules.events.registration.controllers.management.fields import _fi
 from indico.modules.events.registration.models.form_fields import RegistrationFormField
 from indico.modules.events.registration.models.invitations import RegistrationInvitation
 from indico.modules.events.registration.models.items import RegistrationFormItemType, RegistrationFormSection
-from indico.modules.events.registration.models.registrations import RegistrationVisibility
+from indico.modules.events.registration.models.registrations import RegistrationState, RegistrationVisibility
 from indico.modules.events.registration.util import (create_registration, get_event_regforms_registrations,
                                                      get_registered_event_persons, get_ticket_qr_code_data,
                                                      get_user_data, import_invitations_from_user_records,
@@ -941,3 +941,39 @@ def test_modify_registration_conditional(monkeypatch, dummy_user, dummy_regform)
     assert not reg.data_by_field[boolean_field.id].data
     assert boolean_field_2.id not in reg.data_by_field
     assert text_field.id not in reg.data_by_field
+
+
+@pytest.mark.usefixtures('request_context')
+def test_modify_registration_resets_to_pending_with_moderation(monkeypatch, dummy_user, dummy_regform):
+    monkeypatch.setattr('indico.modules.users.util.get_user_by_email', lambda *args, **kwargs: dummy_user)
+
+    section = RegistrationFormSection(registration_form=dummy_regform, title='dummy_section', is_manager_only=False)
+    boolean_field = RegistrationFormField(parent=section, registration_form=dummy_regform)
+    _fill_form_field_with_data(boolean_field, {
+        'input_type': 'bool', 'default_value': False, 'title': 'Yes/No'
+    })
+    db.session.flush()
+
+    # Create a registration as manager (bypasses moderation)
+    data = {
+        boolean_field.html_field_name: True,
+        'email': dummy_user.email, 'first_name': dummy_user.first_name, 'last_name': dummy_user.last_name
+    }
+    reg = create_registration(dummy_regform, data, management=True, notify_user=False)
+    assert reg.state == RegistrationState.complete
+
+    # Enable moderation
+    dummy_regform.moderation_enabled = True
+    db.session.flush()
+
+    # Registrant modifies their registration -> state should become pending
+    modify_registration(reg, {boolean_field.html_field_name: False}, management=False, notify_user=False)
+    assert reg.state == RegistrationState.pending
+
+    # Approve the registration again
+    reg.update_state(approved=True)
+    assert reg.state == RegistrationState.complete
+
+    # Manager modifies the registration -> state should stay complete
+    modify_registration(reg, {boolean_field.html_field_name: True}, management=True, notify_user=False)
+    assert reg.state == RegistrationState.complete
